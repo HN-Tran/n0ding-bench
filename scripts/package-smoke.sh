@@ -13,5 +13,8 @@ until "$binary" doctor --url http://127.0.0.1:18080 >/dev/null 2>&1; do
   i=$((i+1)); [ "$i" -lt 50 ] || { cat "$work/server.log"; exit 1; }
   sleep 0.1
 done
+curl -fsS -X POST http://127.0.0.1:18080/api/v1/fixtures >"$work/fixture.json"
+grep -q '"id":"bench-fixture"' "$work/fixture.json"
+curl -fsS http://127.0.0.1:18080/api/v1/runs/bench-fixture/projection | grep -q '"status":"completed"'
 kill "$pid"
 wait "$pid" 2>/dev/null || true

@@ -27,11 +27,8 @@ func TestRunLifecycleAndModeIsolation(t *testing.T) {
 	if w.Code != 201 {
 		t.Fatalf("create: %d %s", w.Code, w.Body.String())
 	}
-	ev := httptest.NewRequest("POST", "/api/v1/runs/one/events", strings.NewReader(`{"type":"benchmark.completed","data":{"password":"nope"}}`))
-	w = httptest.NewRecorder()
-	h.ServeHTTP(w, ev)
-	if w.Code != 201 || strings.Contains(w.Body.String(), "nope") {
-		t.Fatalf("append/redact: %d %s", w.Code, w.Body.String())
+	if event, err := s.Append("one", "benchmark.completed", map[string]any{"password": "nope"}); err != nil || event.Data["password"] != "[REDACTED]" {
+		t.Fatalf("append/redact: %+v %v", event, err)
 	}
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/runs/one/projection", nil))
@@ -161,9 +158,8 @@ func TestSecretAbsentFromAPIAndExport(t *testing.T) {
 		t.Fatalf("create %d %s", w.Code, w.Body.String())
 	}
 	w = httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/runs/safe/events", strings.NewReader(`{"type":"run.started","data":{"message":"sentinel-supersecret","api_key":"sentinel-supersecret"}}`)))
-	if strings.Contains(w.Body.String(), "sentinel-supersecret") {
-		t.Fatal("secret in append response")
+	if _, err := s.Append("safe", "run.started", map[string]any{"message": "sentinel-supersecret", "api_key": "sentinel-supersecret"}); err != nil {
+		t.Fatal(err)
 	}
 	for _, path := range []string{"/api/v1/runs/safe/events", "/api/v1/runs/safe/export"} {
 		w = httptest.NewRecorder()
@@ -206,7 +202,7 @@ func TestBenchDefinitionsRunAndComparison(t *testing.T) {
 	post("/api/v1/bench/runs", `{"id":"b","name":"B","suite_id":"s","target_ids":["good"]}`, 201)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/comparisons?baseline=a&candidate=b", nil))
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `"delta":1`) {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"delta":1`) || !strings.Contains(w.Body.String(), `"configuration_delta"`) || !strings.Contains(w.Body.String(), `"missing_treatment":"zero"`) {
 		t.Fatalf("comparison: %d %s", w.Code, w.Body.String())
 	}
 	w = httptest.NewRecorder()

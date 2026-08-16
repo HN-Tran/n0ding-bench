@@ -78,7 +78,6 @@ func NewAuthenticated(mode string, store *core.Store, token string) http.Handler
 	m.HandleFunc("GET /api/v1/runs", s.listRuns)
 	m.HandleFunc("POST /api/v1/runs", s.createRun)
 	m.HandleFunc("GET /api/v1/runs/{id}/events", s.events)
-	m.HandleFunc("POST /api/v1/runs/{id}/events", s.appendEvent)
 	if mode == "bench" {
 		m.HandleFunc("GET /api/v1/datasets", s.listDatasets)
 		m.HandleFunc("POST /api/v1/datasets", s.createDataset)
@@ -388,7 +387,7 @@ func (s *Server) startBenchRun(w http.ResponseWriter, r *http.Request) {
 		write(w, 400, map[string]string{"error": "limits: concurrency<=64, max_attempts<=10, timeout_ms<=600000"})
 		return
 	}
-	_, _ = s.Store.Append(x.ID, "benchmark.started", map[string]any{"suite": suite.ID, "suite_digest": versionedSuite.Digest, "dataset": dataset.ID, "dataset_digest": versionedDataset.Digest, "targets": x.TargetIDs, "cases": len(dataset.Cases), "concurrency": x.Concurrency, "max_attempts": x.MaxAttempts, "timeout_ms": x.TimeoutMS})
+	_, _ = s.Store.Append(x.ID, "benchmark.started", map[string]any{"suite": suite.ID, "suite_digest": versionedSuite.Digest, "dataset": dataset.ID, "dataset_digest": versionedDataset.Digest, "targets": x.TargetIDs, "cases": len(dataset.Cases), "concurrency": x.Concurrency, "max_attempts": x.MaxAttempts, "timeout_ms": x.TimeoutMS, "seed": x.Seed})
 	failed := 0
 	for _, target := range targets {
 		var adapter bench.Target
@@ -506,8 +505,29 @@ func (s *Server) compareRuns(w http.ResponseWriter, r *http.Request) {
 		write(w, 409, map[string]string{"error": "comparison requires two single-target runs with the same suite digest"})
 		return
 	}
+	startConfig := func(id string) map[string]string {
+		out := map[string]string{}
+		for _, e := range s.Store.Events(id, 0) {
+			if e.Type != "benchmark.started" {
+				continue
+			}
+			for _, key := range []string{"dataset_digest", "suite_digest", "targets", "concurrency", "max_attempts", "timeout_ms", "seed"} {
+				raw, _ := json.Marshal(e.Data[key])
+				out[key] = string(raw)
+			}
+			break
+		}
+		return out
+	}
+	ac, bc := startConfig(a), startConfig(b)
+	configDelta := map[string]map[string]string{}
+	for key, av := range ac {
+		if bv := bc[key]; av != bv {
+			configDelta[key] = map[string]string{"baseline": av, "candidate": bv}
+		}
+	}
 	c := bench.Compare(a, b, scores(s.Store, a), scores(s.Store, b))
-	write(w, 200, map[string]any{"baseline": c.Baseline, "candidate": c.Candidate, "baseline_score": c.BaselineScore, "candidate_score": c.CandidateScore, "delta": c.Delta, "samples": c.Samples, "missing_baseline": c.MissingBaseline, "missing_candidate": c.MissingCandidate, "missing_treatment": "zero"})
+	write(w, 200, map[string]any{"baseline": c.Baseline, "candidate": c.Candidate, "baseline_score": c.BaselineScore, "candidate_score": c.CandidateScore, "delta": c.Delta, "samples": c.Samples, "missing_baseline": c.MissingBaseline, "missing_candidate": c.MissingCandidate, "missing_treatment": "zero", "compatible": true, "configuration_delta": configDelta})
 }
 
 func (s *Server) exportRun(w http.ResponseWriter, r *http.Request) {

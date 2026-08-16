@@ -12,4 +12,4 @@ WORKDIR /data
 COPY --from=build /out/n0ding-bench /usr/local/bin/n0ding-bench
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/n0ding-bench"]
-CMD ["serve", "--addr", "127.0.0.1:8080", "--db", "/data/bench.db"]
+CMD ["serve", "--addr", "0.0.0.0:8080", "--db", "/data/bench.db"]

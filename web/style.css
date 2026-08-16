@@ -307,6 +307,10 @@ main {
   border-radius: 10px;
   margin-bottom: 18px;
 }
+.compare-controls { display:flex; align-items:center; gap:.65rem; flex-wrap:wrap; padding:1rem 1.25rem; border-bottom:1px solid var(--line); }
+.compare-controls label { color:var(--muted); font-size:.82rem; }
+.compare-controls select { min-width:12rem; color:var(--text); background:var(--surface); border:1px solid var(--line); border-radius:.45rem; padding:.55rem .7rem; }
+#comparisonEvidence { padding:0 1.25rem; }
 .replay-controls label {
   display: flex;
   justify-content: space-between;

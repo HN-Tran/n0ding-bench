@@ -57,6 +57,12 @@
             <label for="replayRange">Replay through event <output id="replayValue">0</output></label>
             <input id="replayRange" type="range" min="0" max="0" value="0">
           </div>
+          <div class="compare-controls">
+            <label for="baselineRun">Compare selected run against</label>
+            <select id="baselineRun"><option value="">Choose baseline…</option></select>
+            <button class="secondary" id="compareRun">Compare</button>
+          </div>
+          <div id="comparisonEvidence"></div>
           <div id="domainEvidence"><p class="empty">Choose a run to inspect its evidence.</p></div>
         </section>
 

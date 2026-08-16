@@ -155,6 +155,9 @@ func serveCommand(args []string, out, errout io.Writer) int {
 	if fs.Parse(args) != nil {
 		return exitUsage
 	}
+	if *token == "" {
+		*token = os.Getenv("N0DING_BENCH_AUTH_TOKEN")
+	}
 	host, _, e := net.SplitHostPort(*addr)
 	if e != nil {
 		jsonOut(errout, map[string]any{"error": "invalid listen address"})

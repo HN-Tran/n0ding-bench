@@ -14,6 +14,8 @@ go build -o n0ding-bench ./cmd/n0ding-bench
 
 Open <http://127.0.0.1:8080>. The deterministic fixture and fake target require no account or provider credential.
 
+For a published container port, set `N0DING_BENCH_AUTH_TOKEN`; remote binding fails closed without it. The web UI asks for that token once and keeps it only in page memory.
+
 CLI commands:
 
 ```text
