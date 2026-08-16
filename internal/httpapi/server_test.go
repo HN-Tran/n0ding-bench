@@ -240,6 +240,18 @@ func TestCrossSiteMutationRejected(t *testing.T) {
 	}
 }
 
+func TestMutationRateLimit(t *testing.T) {
+	h := New("bench", core.NewStore())
+	var w *httptest.ResponseRecorder
+	for i := 0; i < 121; i++ {
+		w = httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/datasets", strings.NewReader(`{}`)))
+	}
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("rate limit=%d %s", w.Code, w.Body.String())
+	}
+}
+
 func TestDatasetCSVImportEndpoint(t *testing.T) {
 	h := New("bench", core.NewStore())
 	req := httptest.NewRequest("POST", "/api/v1/datasets/import?id=csv&name=CSV&version=1&format=csv", strings.NewReader("id,input,expected\na,q,x\n"))

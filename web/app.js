@@ -32,7 +32,7 @@ async function selectRun(id) {
   state.events=eventsPayload.events||[]; state.projection=projection;
   document.querySelectorAll('.run-button').forEach(button=>button.classList.toggle('active',button.dataset.id===id));
   const last=state.events.at(-1)?.sequence||0; $('#replayRange').max=last; $('#replayRange').value=last; $('#replayValue').value=last;
-  $('#exportRun').href=`/api/v1/runs/${encodeURIComponent(id)}/export`; $('#exportRun').removeAttribute('aria-disabled');
+	$('#exportRun').href=`/api/v1/runs/${encodeURIComponent(id)}/export`; $('#exportRun').removeAttribute('aria-disabled');
   render(); announce(`Showing ${state.events.length} stored events for ${state.run.name||id}.`);
 	openLiveStream(id);
 }
@@ -92,6 +92,7 @@ function renderBench(events) {
 }
 
 $('#compareRun').addEventListener('click',async()=>{const baseline=$('#baselineRun').value;if(!baseline||!state.run){announce('Choose a baseline and candidate run.',true);return;}try{const c=await api(`/api/v1/comparisons?baseline=${encodeURIComponent(baseline)}&candidate=${encodeURIComponent(state.run.id)}`);const deltas=Object.entries(c.configuration_delta||{});$('#comparisonEvidence').innerHTML=`<div class="warnings"><strong>Explicit cross-run comparison</strong><p>Baseline ${safe(c.baseline_score)} · Candidate ${safe(c.candidate_score)} · Delta ${safe(c.delta)} · ${safe(c.samples)} identities · missing baseline ${safe(c.missing_baseline)}, candidate ${safe(c.missing_candidate)} (${safe(c.missing_treatment)})</p><ul>${deltas.length?deltas.map(([key,value])=>`<li>${safe(key)}: ${safe(value.baseline)} → ${safe(value.candidate)}</li>`).join(''):'<li>No configuration differences recorded.</li>'}</ul></div>`;}catch(error){$('#comparisonEvidence').innerHTML='';announce(error.message,true);}});
+$('#exportRun').addEventListener('click',async event=>{event.preventDefault();if(!state.run)return;try{const headers={};if(state.authToken)headers.Authorization=`Bearer ${state.authToken}`;const response=await fetch(`/api/v1/runs/${encodeURIComponent(state.run.id)}/export`,{headers});if(!response.ok)throw new Error(`export HTTP ${response.status}`);const url=URL.createObjectURL(await response.blob()),link=document.createElement('a');link.href=url;link.download=`${state.run.id}.replay.json`;link.click();URL.revokeObjectURL(url);}catch(error){announce(error.message,true);}});
 
 function renderTimeline() {
   const events=visibleEvents();

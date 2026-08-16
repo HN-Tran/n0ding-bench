@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -31,6 +32,13 @@ type Server struct {
 	suites   map[string]Suite
 	targets  map[string]Target
 	cancels  map[string]context.CancelFunc
+	rateMu   sync.Mutex
+	rates    map[string]rateWindow
+}
+
+type rateWindow struct {
+	Started time.Time
+	Count   int
 }
 
 type Dataset struct {
@@ -71,7 +79,7 @@ func New(mode string, store *core.Store) http.Handler {
 }
 
 func NewAuthenticated(mode string, store *core.Store, token string) http.Handler {
-	s := &Server{Mode: mode, Store: store, Token: token, datasets: map[string]Dataset{}, suites: map[string]Suite{}, targets: map[string]Target{}, cancels: map[string]context.CancelFunc{}}
+	s := &Server{Mode: mode, Store: store, Token: token, datasets: map[string]Dataset{}, suites: map[string]Suite{}, targets: map[string]Target{}, cancels: map[string]context.CancelFunc{}, rates: map[string]rateWindow{}}
 	s.loadDefinitions()
 	m := http.NewServeMux()
 	m.HandleFunc("GET /healthz", s.health)
@@ -568,6 +576,11 @@ func (s *Server) security(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Frame-Options", "DENY")
 		if strings.HasPrefix(r.URL.Path, "/api/") && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+			if !s.allowMutation(r.RemoteAddr) {
+				w.Header().Set("Retry-After", "60")
+				write(w, http.StatusTooManyRequests, map[string]string{"error": "mutation rate limit exceeded"})
+				return
+			}
 			if strings.EqualFold(r.Header.Get("Sec-Fetch-Site"), "cross-site") {
 				write(w, http.StatusForbidden, map[string]string{"error": "cross-site request rejected"})
 				return
@@ -586,14 +599,31 @@ func (s *Server) security(next http.Handler) http.Handler {
 			}
 		}
 		if s.Token != "" && strings.HasPrefix(r.URL.Path, "/api/") {
-			provided := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			if subtle.ConstantTimeCompare([]byte(provided), []byte(s.Token)) != 1 {
+			authorization := r.Header.Get("Authorization")
+			if !strings.HasPrefix(authorization, "Bearer ") || subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(authorization, "Bearer ")), []byte(s.Token)) != 1 {
 				write(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 				return
 			}
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) allowMutation(remote string) bool {
+	host, _, err := net.SplitHostPort(remote)
+	if err != nil {
+		host = remote
+	}
+	now := time.Now()
+	s.rateMu.Lock()
+	defer s.rateMu.Unlock()
+	w := s.rates[host]
+	if w.Started.IsZero() || now.Sub(w.Started) >= time.Minute {
+		w = rateWindow{Started: now}
+	}
+	w.Count++
+	s.rates[host] = w
+	return w.Count <= 120
 }
 
 func (s *Server) owns(id string) bool { run, ok := s.Store.GetRun(id); return ok && run.Mode == s.Mode }

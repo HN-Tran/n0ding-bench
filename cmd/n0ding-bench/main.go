@@ -98,8 +98,12 @@ func ciCommand(args []string, out, errout io.Writer) int {
 		return exitRejected
 	}
 	var comparison struct {
-		Delta   float64 `json:"delta"`
-		Samples int     `json:"samples"`
+		Delta              float64                      `json:"delta"`
+		Samples            int                          `json:"samples"`
+		MissingBaseline    int                          `json:"missing_baseline"`
+		MissingCandidate   int                          `json:"missing_candidate"`
+		MissingTreatment   string                       `json:"missing_treatment"`
+		ConfigurationDelta map[string]map[string]string `json:"configuration_delta"`
 	}
 	if json.Unmarshal(raw, &comparison) != nil {
 		return exitInternal
@@ -117,7 +121,7 @@ func ciCommand(args []string, out, errout io.Writer) int {
 			return exitInternal
 		}
 	}
-	jsonOut(out, map[string]any{"passed": passed, "delta": comparison.Delta, "minimum": *minDelta, "samples": comparison.Samples})
+	jsonOut(out, map[string]any{"passed": passed, "delta": comparison.Delta, "minimum": *minDelta, "samples": comparison.Samples, "missing_baseline": comparison.MissingBaseline, "missing_candidate": comparison.MissingCandidate, "missing_treatment": comparison.MissingTreatment, "configuration_delta": comparison.ConfigurationDelta})
 	if !passed {
 		return exitRejected
 	}
