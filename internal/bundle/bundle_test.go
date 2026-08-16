@@ -1,0 +1,44 @@
+package bundle
+
+import (
+	"encoding/json"
+	"github.com/hn-tran/n0ding-lab/internal/core"
+	"testing"
+)
+
+func TestExportVerifyReplayAndTamper(t *testing.T) {
+	s := core.NewStore()
+	core.LoadFixture(s, "bench")
+	raw, err := Export(s, "bench-fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = VerifyAndReplay(raw); err != nil {
+		t.Fatal(err)
+	}
+	for i := range raw {
+		if raw[i] == 'b' {
+			raw[i] = 'x'
+			break
+		}
+	}
+	if _, err = VerifyAndReplay(raw); err == nil {
+		t.Fatal("tampered bundle accepted")
+	}
+}
+
+func TestSequenceGapRejectedEvenWithUpdatedChecksum(t *testing.T) {
+	s := core.NewStore()
+	core.LoadFixture(s, "bench")
+	raw, _ := Export(s, "bench-fixture")
+	var b Bundle
+	if err := json.Unmarshal(raw, &b); err != nil {
+		t.Fatal(err)
+	}
+	b.Events[1].Sequence = 9
+	b.Manifest.EventsDigest, _ = digest(b.Events)
+	raw, _ = json.Marshal(b)
+	if _, err := VerifyAndReplay(raw); err == nil {
+		t.Fatal("sequence gap accepted")
+	}
+}

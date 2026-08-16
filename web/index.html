@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Evidence-first inspection for n0ding Bench and Dispatch runs.">
+  <title>n0ding Lab</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <a class="skip" href="#workspace">Skip to run workspace</a>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="n0ding Lab home"><span class="mark">n0</span>ding <span>/ lab</span></a>
+    <div class="top-status">
+      <span class="signal" id="connectionDot" aria-hidden="true"></span>
+      <span id="connectionText">Connecting</span>
+      <span class="state-pill" id="viewState">LIVE</span>
+    </div>
+  </header>
+
+  <main id="workspace">
+    <section class="intro">
+      <div>
+        <p class="eyebrow" id="modeEyebrow">RUN INSPECTION</p>
+        <h1 id="productTitle">See the run.<br><em>Trust the evidence.</em></h1>
+        <p id="productCopy">Every state shown here is derived from stored backend events. No invented agents, scores, or activity.</p>
+      </div>
+      <button class="primary" id="startFixture"><span>Run deterministic fixture</span><span aria-hidden="true">↗</span></button>
+    </section>
+
+    <div class="notice" id="notice" role="status" aria-live="polite">Loading server state…</div>
+
+    <section class="layout">
+      <aside class="panel runs-panel" aria-labelledby="runsHeading">
+        <div class="panel-head"><div><p class="kicker">HISTORY</p><h2 id="runsHeading">Runs</h2></div><button class="icon-button" id="refresh" aria-label="Refresh runs">↻</button></div>
+        <div id="runs" class="run-list"><p class="empty">No runs loaded.</p></div>
+      </aside>
+
+      <div class="main-column">
+        <section class="summary-grid" aria-label="Run summary">
+          <article class="metric"><span>Status</span><strong id="status">—</strong></article>
+          <article class="metric"><span>Events</span><strong id="steps">0</strong></article>
+          <article class="metric"><span>Last event</span><strong id="lastEvent">—</strong></article>
+          <article class="metric"><span>Created</span><strong id="created">—</strong></article>
+        </section>
+
+        <section class="panel evidence" aria-labelledby="evidenceHeading">
+          <div class="panel-head">
+            <div><p class="kicker" id="evidenceKicker">EVIDENCE</p><h2 id="evidenceHeading">Select a run</h2></div>
+            <div class="mode-tabs" aria-label="Projection view">
+              <button class="tab active" data-view="latest" aria-pressed="true">Latest</button>
+              <button class="tab" data-view="replay" aria-pressed="false">Replay</button>
+            </div>
+          </div>
+          <div class="replay-controls" id="replayControls" hidden>
+            <label for="replayRange">Replay through event <output id="replayValue">0</output></label>
+            <input id="replayRange" type="range" min="0" max="0" value="0">
+          </div>
+          <div id="domainEvidence"><p class="empty">Choose a run to inspect its evidence.</p></div>
+        </section>
+
+        <section class="panel" aria-labelledby="timelineHeading">
+          <div class="panel-head"><div><p class="kicker">APPEND-ONLY LOG</p><h2 id="timelineHeading">Event timeline</h2></div><span class="mono muted" id="runId">No run</span></div>
+          <div class="table-wrap"><table><thead><tr><th scope="col">#</th><th scope="col">Time</th><th scope="col">Event</th><th scope="col">Evidence</th></tr></thead><tbody id="timeline"><tr><td colspan="4" class="empty">No events.</td></tr></tbody></table></div>
+        </section>
+      </div>
+    </section>
+  </main>
+  <footer><span>n0ding Lab · private vertical prototype</span><span>Read-only replay never executes tools</span></footer>
+  <script src="/app.js" defer></script>
+</body>
+</html>
