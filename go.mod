@@ -1,4 +1,4 @@
-module github.com/hn-tran/n0ding-lab
+module github.com/hn-tran/n0ding-bench
 
 go 1.23.0
 

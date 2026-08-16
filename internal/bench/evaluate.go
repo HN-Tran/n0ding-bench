@@ -55,13 +55,32 @@ type Comparison struct {
 	Baseline, Candidate                  string
 	BaselineScore, CandidateScore, Delta float64
 	Samples                              int
+	MissingBaseline, MissingCandidate    int
 }
 
 func Compare(baseline, candidate string, a, b []Result) Comparison {
-	c := Comparison{Baseline: baseline, Candidate: candidate, Samples: min(len(a), len(b))}
-	for i := 0; i < c.Samples; i++ {
-		c.BaselineScore += a[i].Score
-		c.CandidateScore += b[i].Score
+	c := Comparison{Baseline: baseline, Candidate: candidate}
+	am, bm, keys := map[string]float64{}, map[string]float64{}, map[string]bool{}
+	for _, r := range a {
+		am[r.CaseID] = r.Score
+		keys[r.CaseID] = true
+	}
+	for _, r := range b {
+		bm[r.CaseID] = r.Score
+		keys[r.CaseID] = true
+	}
+	c.Samples = len(keys)
+	for key := range keys {
+		av, aok := am[key]
+		bv, bok := bm[key]
+		if !aok {
+			c.MissingBaseline++
+		}
+		if !bok {
+			c.MissingCandidate++
+		}
+		c.BaselineScore += av
+		c.CandidateScore += bv
 	}
 	if c.Samples > 0 {
 		c.BaselineScore /= float64(c.Samples)
@@ -69,10 +88,4 @@ func Compare(baseline, candidate string, a, b []Result) Comparison {
 	}
 	c.Delta = c.CandidateScore - c.BaselineScore
 	return c
-}
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

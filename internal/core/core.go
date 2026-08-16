@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hn-tran/n0ding-lab/internal/persistence"
+	"github.com/hn-tran/n0ding-bench/internal/persistence"
 )
 
 type Event struct {
@@ -68,7 +68,7 @@ func (e *Event) UnmarshalJSON(raw []byte) error {
 	if err := dec.Decode(&v); err != nil {
 		return err
 	}
-	if v.SchemaVersion != "1.0" || v.EventID == "" || v.RunID == "" || v.Sequence < 1 || v.OccurredAt.IsZero() || !v.RecordedAt.Equal(v.OccurredAt) || v.Source.Component != "prototype" || (v.Source.Product != "bench" && v.Source.Product != "dispatch") || !eventTypePattern.MatchString(v.Type) || v.Subject.Kind != "run" || v.Subject.ID != v.RunID || v.Payload == nil || !v.Redaction.Applied {
+	if v.SchemaVersion != "1.0" || v.EventID == "" || v.RunID == "" || v.Sequence < 1 || v.OccurredAt.IsZero() || !v.RecordedAt.Equal(v.OccurredAt) || v.Source.Component != "prototype" || v.Source.Product != "bench" || !eventTypePattern.MatchString(v.Type) || v.Subject.Kind != "run" || v.Subject.ID != v.RunID || v.Payload == nil || !v.Redaction.Applied {
 		return errors.New("invalid canonical event envelope")
 	}
 	if _, err := fmt.Sscan(v.EventID, &e.ID); err != nil || e.ID < 1 {
@@ -101,16 +101,17 @@ type Projection struct {
 }
 
 type Store struct {
-	mu     sync.RWMutex
-	runs   map[string]Run
-	events map[string][]Event
-	nextID int64
-	notify chan struct{}
-	db     *persistence.SQLite
+	mu          sync.RWMutex
+	runs        map[string]Run
+	events      map[string][]Event
+	nextID      int64
+	notify      chan struct{}
+	db          *persistence.SQLite
+	definitions map[string]map[string]json.RawMessage
 }
 
 func NewStore() *Store {
-	return &Store{runs: map[string]Run{}, events: map[string][]Event{}, notify: make(chan struct{})}
+	return &Store{runs: map[string]Run{}, events: map[string][]Event{}, notify: make(chan struct{}), definitions: map[string]map[string]json.RawMessage{}}
 }
 
 // OpenStore opens a durable store. Call Close before replacing or removing its database.
@@ -144,6 +145,16 @@ func OpenStore(path string) (*Store, error) {
 			s.nextID = e.ID
 		}
 	}
+	// A process cannot resume provider calls safely. Mark every persisted active
+	// run as interrupted so restart never presents stale work as still running.
+	for id, evs := range s.events {
+		if projectStatus(evs) == "running" {
+			if _, err := s.Append(id, "benchmark.interrupted", map[string]any{"reason": "process_restart", "resumable": false}); err != nil {
+				db.Close()
+				return nil, fmt.Errorf("reconcile run %q: %w", id, err)
+			}
+		}
+	}
 	return s, nil
 }
 
@@ -152,6 +163,55 @@ func (s *Store) Close() error {
 		return s.db.Close()
 	}
 	return nil
+}
+
+func (s *Store) SaveDefinition(kind, id string, value any) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	var generic any
+	if err = json.Unmarshal(raw, &generic); err != nil {
+		return err
+	}
+	clean := redactValue(generic)
+	b, err := json.Marshal(clean)
+	if err != nil {
+		return err
+	}
+	if s.db != nil {
+		return s.db.SaveDefinition(kind, id, b)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.definitions[kind] == nil {
+		s.definitions[kind] = map[string]json.RawMessage{}
+	}
+	if _, ok := s.definitions[kind][id]; ok {
+		return errors.New("definition exists")
+	}
+	s.definitions[kind][id] = append(json.RawMessage(nil), b...)
+	return nil
+}
+func (s *Store) Definitions(kind string) ([]json.RawMessage, error) {
+	if s.db != nil {
+		rows, err := s.db.Definitions(kind)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]json.RawMessage, len(rows))
+		for i := range rows {
+			out[i] = append(json.RawMessage(nil), rows[i]...)
+		}
+		return out, nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []json.RawMessage
+	for _, raw := range s.definitions[kind] {
+		out = append(out, append(json.RawMessage(nil), raw...))
+	}
+	return out, nil
 }
 
 func (s *Store) CreateRun(run Run) error {
@@ -234,6 +294,12 @@ func (s *Store) Append(runID, typ string, data map[string]any) (Event, error) {
 
 func nextStatus(current, typ string) string {
 	switch {
+	case typ == "benchmark.completed_with_errors":
+		return "completed"
+	case strings.HasSuffix(typ, ".cancelled"):
+		return "cancelled"
+	case strings.HasSuffix(typ, ".interrupted"):
+		return "interrupted"
 	case strings.HasSuffix(typ, ".started"):
 		return "running"
 	case strings.HasSuffix(typ, ".completed"):
@@ -308,6 +374,12 @@ func (s *Store) Replay(runID string, upto int64) (Projection, error) {
 		p.Steps++
 		p.LastEventID = e.ID
 		switch {
+		case e.Type == "benchmark.completed_with_errors":
+			p.Status = "completed"
+		case strings.HasSuffix(e.Type, ".cancelled"):
+			p.Status = "cancelled"
+		case strings.HasSuffix(e.Type, ".interrupted"):
+			p.Status = "interrupted"
 		case strings.HasSuffix(e.Type, ".started"):
 			p.Status = "running"
 		case strings.HasSuffix(e.Type, ".completed"):

@@ -1,26 +1,54 @@
-# n0ding Lab
+# n0ding Bench
 
-Private vertical prototype testing whether Bench and Dispatch can share compatible event/replay infrastructure without sharing domain vocabulary. It is intentionally not a public release or a production-readiness claim.
+Local-first benchmark and evaluation harness for running, comparing, inspecting and replaying AI evaluations without hiding how scores were produced.
+
+> Private v0.1 development branch. Not published, stable or production-ready.
+
+## Quick start
 
 ```bash
-go test ./...
-go run ./cmd/n0ding-lab -mode bench -db bench.db -addr 127.0.0.1:8080
-go run ./cmd/n0ding-lab -mode dispatch -db dispatch.db -addr 127.0.0.1:8081
+go build -o n0ding-bench ./cmd/n0ding-bench
+./n0ding-bench init --db bench.db
+./n0ding-bench serve --db bench.db
 ```
 
-Open the corresponding URL and run the deterministic fixture. Each mode owns its SQLite-WAL database and recovers projections after restart.
+Open <http://127.0.0.1:8080>. The deterministic fixture and fake target require no account or provider credential.
 
-Non-loopback binding fails closed unless `-auth-token` is supplied. The token is required for API requests in that mode. TLS is expected at a trusted reverse proxy for remote use.
+CLI commands:
 
-Replay bundles are read-only JSON evidence envelopes:
+```text
+n0ding-bench init
+n0ding-bench serve
+n0ding-bench run --file run.json
+n0ding-bench runs
+n0ding-bench export --run RUN_ID
+n0ding-bench doctor
+n0ding-bench ci --baseline RUN_ID --candidate RUN_ID --min-delta 0 --junit report.xml
+```
 
-- `GET /api/v1/runs/{id}/export`
-- `POST /api/v1/replay/import`
+The CLI emits JSON and uses stable exit codes: `0` success, `2` usage, `3` unavailable, `4` rejected and `5` internal failure.
 
-The import verifies size, manifest, event checksum, run scope, and normalized projection digest. It reconstructs a projection without invoking providers, agents, or tools.
+## What v0.1 covers
 
-## Evidence and limitations
+- immutable dataset and suite versions with content digests;
+- deterministic fake and OpenAI-compatible targets;
+- exact, contains, regex, numeric-tolerance, latency and error-rate scoring;
+- bounded concurrency, timeouts, retry classification and cancellation;
+- case-level evidence, scorer provenance and explicit baseline comparison;
+- SQLite-WAL recovery, resumable SSE and offline projection replay;
+- checksummed export/import that never invokes a provider;
+- embedded LIVE/REPLAY web UI;
+- loopback-only default and fail-closed authenticated remote bind.
 
-Automated tests cover SQLite restart recovery, pre-persistence redaction, separate databases, SSE resume, mode isolation, authenticated APIs, deterministic Bench scoring/comparison, Dispatch approval binding, idempotency, fencing, `outcome_unknown`, and replay tamper detection.
+Bench records reproducible configuration and evidence, not guaranteed bit-identical remote-model output. Aggregates never hide raw failures or missing samples.
 
-This remains a vertical prototype. It does not claim tamper-proof storage, exactly-once distributed execution, sandboxing, intelligent routing, full remote-model reproducibility, multi-user isolation, or production readiness.
+## Documentation
+
+- [Reproducibility and comparison](docs/reproducibility.md)
+- [Security model](docs/security.md)
+- [Operations](docs/operations.md)
+- [HTTP API](docs/api.md)
+- [Threat model](docs/threat-model.md)
+- [Event schema](schemas/event-envelope.schema.json)
+
+Bench is independent. It does not require n0ding Cache or any agent-orchestration product.

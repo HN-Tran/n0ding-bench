@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Evidence-first inspection for n0ding Bench and Dispatch runs.">
-  <title>n0ding Lab</title>
+  <meta name="description" content="Run, compare, inspect, and replay AI evaluations with visible evidence.">
+  <title>n0ding Bench</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <a class="skip" href="#workspace">Skip to run workspace</a>
   <header class="topbar">
-    <a class="brand" href="/" aria-label="n0ding Lab home"><span class="mark">n0</span>ding <span>/ lab</span></a>
+    <a class="brand" href="/" aria-label="n0ding Bench home"><span class="mark">n0</span>ding <span>/ bench</span></a>
     <div class="top-status">
       <span class="signal" id="connectionDot" aria-hidden="true"></span>
       <span id="connectionText">Connecting</span>
@@ -21,9 +21,9 @@
   <main id="workspace">
     <section class="intro">
       <div>
-        <p class="eyebrow" id="modeEyebrow">RUN INSPECTION</p>
-        <h1 id="productTitle">See the run.<br><em>Trust the evidence.</em></h1>
-        <p id="productCopy">Every state shown here is derived from stored backend events. No invented agents, scores, or activity.</p>
+        <p class="eyebrow">EVIDENCE-FIRST EVALUATION</p>
+        <h1>Compare outcomes.<br><em>Inspect the evidence.</em></h1>
+        <p>Run, compare, and replay evaluations without hiding failed samples, scorer provenance, or configuration differences.</p>
       </div>
       <button class="primary" id="startFixture"><span>Run deterministic fixture</span><span aria-hidden="true">↗</span></button>
     </section>
@@ -46,7 +46,8 @@
 
         <section class="panel evidence" aria-labelledby="evidenceHeading">
           <div class="panel-head">
-            <div><p class="kicker" id="evidenceKicker">EVIDENCE</p><h2 id="evidenceHeading">Select a run</h2></div>
+            <div><p class="kicker">BENCHMARK EVIDENCE</p><h2 id="evidenceHeading">Select a run</h2></div>
+            <a class="secondary" id="exportRun" href="#" aria-disabled="true">Export evidence</a>
             <div class="mode-tabs" aria-label="Projection view">
               <button class="tab active" data-view="latest" aria-pressed="true">Latest</button>
               <button class="tab" data-view="replay" aria-pressed="false">Replay</button>
@@ -66,7 +67,7 @@
       </div>
     </section>
   </main>
-  <footer><span>n0ding Lab · private vertical prototype</span><span>Read-only replay never executes tools</span></footer>
+  <footer><span>n0ding Bench · evaluation evidence</span><span>Read-only replay never contacts targets</span></footer>
   <script src="/app.js" defer></script>
 </body>
 </html>

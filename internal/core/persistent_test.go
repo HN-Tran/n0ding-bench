@@ -34,10 +34,10 @@ func TestPersistentStoreReopensAndContinuesOrderedIDs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Status != "running" || p.Steps != 1 || p.LastEventID != e1.ID {
+	if p.Status != "interrupted" || p.Steps != 2 || p.LastEventID <= e1.ID {
 		t.Fatalf("bad recovered projection: %#v", p)
 	}
-	e2, err := s.Append("run-1", "benchmark.completed", map[string]any{"score": 1})
+	e2, err := s.Append("run-1", "run.inspected", map[string]any{"recovered": true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestPersistentStoreReopensAndContinuesOrderedIDs(t *testing.T) {
 		t.Fatalf("IDs not monotonic across restart: %d then %d", e1.ID, e2.ID)
 	}
 	p, _ = s.Replay("run-1", 0)
-	if p.Status != "completed" || p.Steps != 2 {
+	if p.Status != "interrupted" || p.Steps != 3 {
 		t.Fatalf("bad final projection: %#v", p)
 	}
 }
@@ -76,12 +76,12 @@ func TestPersistentStoreRejectsCorruptSequence(t *testing.T) {
 
 func TestPersistentStoreRedactsBeforeSQLite(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "dispatch.db")
+	path := filepath.Join(dir, "secret.db")
 	s, err := OpenStore(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.CreateRun(Run{ID: "run-secret", Mode: "dispatch"}); err != nil {
+	if err := s.CreateRun(Run{ID: "run-secret", Mode: "bench"}); err != nil {
 		t.Fatal(err)
 	}
 	secret := "uniquely-sensitive-credential"
@@ -125,12 +125,42 @@ func TestSeparateDatabaseFilesDoNotShareModes(t *testing.T) {
 		t.Fatal(err)
 	}
 	bench.Close()
-	dispatch, err := OpenStore(filepath.Join(dir, "dispatch.db"))
+	other, err := OpenStore(filepath.Join(dir, "secret.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer dispatch.Close()
-	if _, ok := dispatch.GetRun("b"); ok {
+	defer other.Close()
+	if _, ok := other.GetRun("b"); ok {
 		t.Fatal("run leaked between mode databases")
+	}
+}
+
+func TestRestartReconcilesActiveRunAsInterrupted(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bench.db")
+	s, err := OpenStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateRun(Run{ID: "active", Mode: "bench", Name: "Active"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Append("active", "benchmark.started", map[string]any{"case": "one"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = OpenStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	p, err := s.Replay("active", 0)
+	if err != nil || p.Status != "interrupted" {
+		t.Fatalf("projection=%+v err=%v", p, err)
+	}
+	events := s.Events("active", 0)
+	if got := events[len(events)-1].Type; got != "benchmark.interrupted" {
+		t.Fatalf("last event=%s", got)
 	}
 }

@@ -2,7 +2,7 @@ package bundle
 
 import (
 	"encoding/json"
-	"github.com/hn-tran/n0ding-lab/internal/core"
+	"github.com/hn-tran/n0ding-bench/internal/core"
 	"testing"
 )
 
@@ -36,7 +36,7 @@ func TestSequenceGapRejectedEvenWithUpdatedChecksum(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.Events[1].Sequence = 9
-	b.Manifest.EventsDigest, _ = digest(b.Events)
+	b.Manifest.EventsDigest, _ = eventsDigest(b.Events)
 	raw, _ = json.Marshal(b)
 	if _, err := VerifyAndReplay(raw); err == nil {
 		t.Fatal("sequence gap accepted")

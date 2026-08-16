@@ -86,7 +86,7 @@
       "required": ["product", "component"],
       "properties": {
         "product": {
-          "enum": ["bench", "dispatch"]
+          "enum": ["bench"]
         },
         "component": {
           "type": "string",

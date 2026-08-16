@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hn-tran/n0ding-lab/internal/core"
+	"github.com/hn-tran/n0ding-bench/internal/core"
 )
 
 const MaxBundleBytes = 8 << 20
@@ -37,6 +37,18 @@ func projectionDigest(p core.Projection) (string, error) {
 	return digest(p)
 }
 
+func eventsDigest(events []core.Event) (string, error) {
+	raw, err := json.Marshal(events)
+	if err != nil {
+		return "", err
+	}
+	var normalized any
+	if err = json.Unmarshal(raw, &normalized); err != nil {
+		return "", err
+	}
+	return digest(normalized)
+}
+
 func Export(store *core.Store, runID string) ([]byte, error) {
 	run, ok := store.GetRun(runID)
 	if !ok {
@@ -47,7 +59,7 @@ func Export(store *core.Store, runID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	ed, _ := digest(events)
+	ed, _ := eventsDigest(events)
 	pd, _ := projectionDigest(projection)
 	b := Bundle{Manifest: Manifest{Format: "n0ding-replay/v1", Mode: run.Mode, RunID: runID, ProjectionDigest: pd, EventsDigest: ed, EventCount: len(events)}, Run: run, Events: events}
 	return json.MarshalIndent(b, "", "  ")
@@ -64,7 +76,7 @@ func VerifyAndReplay(raw []byte) (core.Projection, error) {
 	if b.Manifest.Format != "n0ding-replay/v1" || b.Manifest.EventCount != len(b.Events) {
 		return core.Projection{}, errors.New("manifest mismatch")
 	}
-	ed, _ := digest(b.Events)
+	ed, _ := eventsDigest(b.Events)
 	if ed != b.Manifest.EventsDigest {
 		return core.Projection{}, errors.New("event checksum mismatch")
 	}
