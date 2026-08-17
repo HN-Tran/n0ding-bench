@@ -15,3 +15,16 @@ Build with `make build`, copy `bin/n0ding-bench` into a directory on `PATH`, the
 Stop Bench before copying `bench.db`, or use SQLite's online backup API. Do not copy only the main file while `bench.db-wal` is active. Restore while the service is stopped, retain the replaced files until validation succeeds, and run `n0ding-bench doctor` after startup.
 
 Uninstall by stopping the service and removing the binary. Delete the database and replay exports only when their retention period has expired; they may contain prompts and model outputs even though recognized credentials are redacted.
+
+## Container data directory
+
+The image runs as UID/GID `65532` and ships `/data` owned by that identity. Its
+default database is `/data/bench.db`. The compose deployment mounts a named
+volume there while keeping the
+root filesystem read-only and enabling `no-new-privileges`.
+
+CI runs `scripts/container-layout-smoke.sh` twice: once against the raw image
+layer and once with the hardened named-volume layout. Both runs must remain
+healthy, create a non-empty SQLite database, execute the authenticated fixture,
+and expose its completed projection. This verifies writable packaging and
+startup; it is not a durability or backup/restore drill.
