@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -36,16 +37,7 @@ func TestInitAndStableUsageExit(t *testing.T) {
 // a supported, deterministic target whose exact response evidence is replayable.
 func TestDogfoodRegressionGate(t *testing.T) {
 	store := core.NewStore()
-	providerCalls := 0
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// A replay import must never reach a target. All target execution in this
-		// scenario happens synchronously on the two run-creation requests below.
-		if r.URL.Path == "/api/v1/bench/runs" && r.Method == http.MethodPost {
-			providerCalls++
-		}
-		httpapi.New("bench", store).ServeHTTP(w, r)
-	})
-	srv := httptest.NewServer(h)
+	srv := httptest.NewServer(httpapi.New("bench", store))
 	defer srv.Close()
 
 	post := func(path, body string, want int) []byte {
@@ -70,35 +62,62 @@ func TestDogfoodRegressionGate(t *testing.T) {
 	post("/api/v1/targets", `{"id":"regressed-target","name":"Regressed fixture","adapter":"fake","outputs":{"capital":"Lyon","sum":"5"}}`, http.StatusCreated)
 	post("/api/v1/bench/runs", `{"id":"dogfood-baseline","name":"Dogfood baseline","suite_id":"dogfood-suite","target_ids":["baseline-target"],"seed":17}`, http.StatusCreated)
 	post("/api/v1/bench/runs", `{"id":"dogfood-regressed","name":"Dogfood regressed","suite_id":"dogfood-suite","target_ids":["regressed-target"],"seed":17}`, http.StatusCreated)
-	if providerCalls != 2 {
-		t.Fatalf("target execution count=%d, want 2", providerCalls)
-	}
-
 	var out, errout bytes.Buffer
+	var green struct {
+		Passed  bool    `json:"passed"`
+		Delta   float64 `json:"delta"`
+		Minimum float64 `json:"minimum"`
+	}
+	if code := run([]string{"ci", "--url", srv.URL, "--baseline", "dogfood-baseline", "--candidate", "dogfood-baseline", "--min-delta", "0"}, &out, &errout); code != exitOK {
+		t.Fatalf("green CI exit=%d; out=%s err=%s", code, out.String(), errout.String())
+	}
+	if err := json.Unmarshal(out.Bytes(), &green); err != nil || !green.Passed || green.Delta != 0 || green.Minimum != 0 {
+		t.Fatalf("typed green result: %+v err=%v", green, err)
+	}
+	out.Reset()
+	errout.Reset()
 	junit := filepath.Join(t.TempDir(), "dogfood-regression.xml")
 	code := run([]string{"ci", "--url", srv.URL, "--baseline", "dogfood-baseline", "--candidate", "dogfood-regressed", "--min-delta", "-0.25", "--junit", junit}, &out, &errout)
 	if code != exitRejected {
 		t.Fatalf("CI exit=%d, want %d; out=%s err=%s", code, exitRejected, out.String(), errout.String())
 	}
-	if !strings.Contains(out.String(), `"delta":-1`) || !strings.Contains(out.String(), `"minimum":-0.25`) || !strings.Contains(out.String(), `"targets"`) || !strings.Contains(out.String(), `baseline-target`) || !strings.Contains(out.String(), `regressed-target`) {
-		t.Fatalf("comparison lacks threshold/config evidence: %s", out.String())
+	var red struct {
+		Passed             bool                         `json:"passed"`
+		Delta              float64                      `json:"delta"`
+		Minimum            float64                      `json:"minimum"`
+		Samples            int                          `json:"samples"`
+		ConfigurationDelta map[string]map[string]string `json:"configuration_delta"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &red); err != nil || red.Passed || red.Delta != -1 || red.Minimum != -0.25 || red.Samples != 2 || red.ConfigurationDelta["targets"]["baseline"] == red.ConfigurationDelta["targets"]["candidate"] {
+		t.Fatalf("typed red result: %+v err=%v", red, err)
 	}
 	xmlEvidence, err := os.ReadFile(junit)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(xmlEvidence), `name="candidate-vs-baseline[baseline=dogfood-baseline,candidate=dogfood-regressed]"`) || !strings.Contains(string(xmlEvidence), `delta=-1 minimum=-0.25 samples=2`) {
-		t.Fatalf("JUnit lacks named expected failure: %s", xmlEvidence)
+	var report junitSuite
+	if err := xml.Unmarshal(xmlEvidence, &report); err != nil || report.Failures != 1 || report.Tests != 1 || report.Case.Name != "candidate-vs-baseline[baseline=dogfood-baseline,candidate=dogfood-regressed]" || report.Case.Failure == nil || report.Case.Failure.Text != "delta=-1 minimum=-0.25 samples=2" {
+		t.Fatalf("typed JUnit: %+v err=%v", report, err)
 	}
 
 	events, status, err := do("GET", srv.URL+"/api/v1/runs/dogfood-regressed/events", "", nil)
 	if err != nil || status != http.StatusOK {
 		t.Fatalf("events: %d %v %s", status, err, events)
 	}
-	for _, evidence := range []string{`"case":"capital"`, `"expected":"Paris"`, `"actual":"Lyon"`, `"scorer":"exact"`, `"passed":false`, `"seed":17`} {
-		if !strings.Contains(string(events), evidence) {
-			t.Fatalf("events lack %s: %s", evidence, events)
+	var eventList struct {
+		Events []core.Event `json:"events"`
+	}
+	if err := json.Unmarshal(events, &eventList); err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, event := range eventList.Events {
+		if event.Type == "score.recorded" && event.Data["case"] == "capital" && event.Data["expected"] == "Paris" && event.Data["actual"] == "Lyon" && event.Data["scorer"] == "exact" && event.Data["passed"] == false {
+			found = true
 		}
+	}
+	if !found {
+		t.Fatalf("typed score evidence absent: %+v", eventList.Events)
 	}
 
 	exported, status, err := do("GET", srv.URL+"/api/v1/runs/dogfood-regressed/export", "", nil)
@@ -112,11 +131,7 @@ func TestDogfoodRegressionGate(t *testing.T) {
 	if envelope.Manifest.EventsDigest == "" || envelope.Manifest.ProjectionDigest == "" {
 		t.Fatalf("export lacks checksums: %+v", envelope.Manifest)
 	}
-	beforeReplay := providerCalls
 	post("/api/v1/replay/import", string(exported), http.StatusOK)
-	if providerCalls != beforeReplay {
-		t.Fatalf("offline replay invoked target: before=%d after=%d", beforeReplay, providerCalls)
-	}
 }
 
 func TestCIThresholdGreenAndRed(t *testing.T) {

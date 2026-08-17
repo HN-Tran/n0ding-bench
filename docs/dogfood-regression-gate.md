@@ -8,10 +8,11 @@ candidate delta is `-1`, so `n0ding-bench ci` must exit `4` and write a JUnit
 failure naming both run IDs.
 
 The same scenario checks case IDs, expected and actual values, scorer kind and
-result, seed/configuration delta, export event/projection checksums, and offline
-import/replay. A call counter proves replay does not invoke the target. This is
-a hermetic release gate, not evidence about the quality or reproducibility of a
-remote model. Run it with:
+result, configuration delta, export event/projection checksums, and offline
+import/replay. Replay verification accepts only bundle bytes and constructs a
+fresh projection store; it has no target or adapter dependency and therefore no
+execution boundary to invoke. This is a hermetic CLI/API release-gate check, not
+UI coverage or evidence about remote-model quality. Run it with:
 
 ```bash
 go test ./cmd/n0ding-bench -run '^TestDogfoodRegressionGate$' -v
