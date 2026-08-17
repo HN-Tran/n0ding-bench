@@ -68,11 +68,20 @@ func TestDogfoodRegressionGate(t *testing.T) {
 		Delta   float64 `json:"delta"`
 		Minimum float64 `json:"minimum"`
 	}
-	if code := run([]string{"ci", "--url", srv.URL, "--baseline", "dogfood-baseline", "--candidate", "dogfood-baseline", "--min-delta", "0"}, &out, &errout); code != exitOK {
+	greenJUnit := filepath.Join(t.TempDir(), "dogfood-green.xml")
+	if code := run([]string{"ci", "--url", srv.URL, "--baseline", "dogfood-baseline", "--candidate", "dogfood-baseline", "--min-delta", "0", "--junit", greenJUnit}, &out, &errout); code != exitOK {
 		t.Fatalf("green CI exit=%d; out=%s err=%s", code, out.String(), errout.String())
 	}
 	if err := json.Unmarshal(out.Bytes(), &green); err != nil || !green.Passed || green.Delta != 0 || green.Minimum != 0 {
 		t.Fatalf("typed green result: %+v err=%v", green, err)
+	}
+	greenXML, err := os.ReadFile(greenJUnit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var greenReport junitSuite
+	if err := xml.Unmarshal(greenXML, &greenReport); err != nil || greenReport.Tests != 1 || greenReport.Failures != 0 || greenReport.Case.Name != "candidate-vs-baseline[baseline=dogfood-baseline,candidate=dogfood-baseline]" || greenReport.Case.Failure != nil {
+		t.Fatalf("typed green JUnit: %+v err=%v", greenReport, err)
 	}
 	out.Reset()
 	errout.Reset()

@@ -179,27 +179,37 @@ func TestScoreExpectedActualSentinelsRedactedFromStorageAPIAndExport(t *testing.
 		t.Fatal(err)
 	}
 	h := New("bench", s)
-	post := func(path, body string, want int) {
+	post := func(path, body string, want int) []byte {
 		t.Helper()
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest("POST", path, strings.NewReader(body)))
 		if w.Code != want {
 			t.Fatalf("%s: %d %s", path, w.Code, w.Body.String())
 		}
+		return w.Body.Bytes()
 	}
-	post("/api/v1/datasets", `{"id":"secret-d","name":"Secret","version":"1","cases":[{"id":"c","input":"q","expected":"sentinel-expected-secret"}]}`, 201)
+	created := post("/api/v1/datasets", `{"id":"secret-d","name":"Secret","version":"1","cases":[{"id":"c","input":"q","expected":"sentinel-expected-secret"}]}`, 201)
+	var createdDataset Dataset
+	if err := json.Unmarshal(created, &createdDataset); err != nil || createdDataset.Cases[0].Expected != "[REDACTED]" {
+		t.Fatalf("POST dataset not structurally redacted: %+v err=%v", createdDataset, err)
+	}
 	post("/api/v1/suites", `{"id":"secret-s","name":"Secret suite","version":"1","dataset_id":"secret-d","scorers":[{"kind":"exact"}]}`, 201)
 	post("/api/v1/targets", `{"id":"secret-t","name":"Secret target","adapter":"fake","outputs":{"c":"sentinel-actual-secret"}}`, 201)
 	post("/api/v1/bench/runs", `{"id":"secret-r","name":"Secret run","suite_id":"secret-s","target_ids":["secret-t"]}`, 201)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/datasets", nil))
+	var listed struct {
+		Datasets []Dataset `json:"datasets"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &listed); err != nil || len(listed.Datasets) != 1 || listed.Datasets[0].Cases[0].Expected != "[REDACTED]" {
+		t.Fatalf("GET datasets not structurally redacted: %+v err=%v", listed, err)
+	}
 	for _, path := range []string{"/api/v1/runs/secret-r/events", "/api/v1/runs/secret-r/export"} {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
 		if w.Code != 200 || strings.Contains(w.Body.String(), "sentinel-expected-secret") || strings.Contains(w.Body.String(), "sentinel-actual-secret") {
 			t.Fatalf("sentinel leak in %s: %s", path, w.Body.String())
 		}
-	}
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
 	}
 	for _, suffix := range []string{"", "-wal"} {
 		raw, err := os.ReadFile(dbPath + suffix)
@@ -212,6 +222,9 @@ func TestScoreExpectedActualSentinelsRedactedFromStorageAPIAndExport(t *testing.
 		if bytes.Contains(raw, []byte("sentinel-expected-secret")) || bytes.Contains(raw, []byte("sentinel-actual-secret")) {
 			t.Fatalf("sentinel persisted in %s", dbPath+suffix)
 		}
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
 

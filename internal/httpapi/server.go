@@ -188,6 +188,10 @@ func (s *Server) createDataset(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if err := redactDataset(&x); err != nil {
+		write(w, 500, map[string]string{"error": "redact dataset"})
+		return
+	}
 	versioned, err := bench.NewDataset(x.Name, x.Version, x.Cases)
 	if err != nil {
 		write(w, 400, map[string]string{"error": err.Error()})
@@ -240,6 +244,16 @@ func (s *Server) importDataset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	x := Dataset{ID: id, Name: name, Version: version, Cases: cases, Digest: versioned.Digest}
+	if err := redactDataset(&x); err != nil {
+		write(w, 500, map[string]string{"error": "redact dataset"})
+		return
+	}
+	versioned, err = bench.NewDataset(x.Name, x.Version, x.Cases)
+	if err != nil {
+		write(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+	x.Digest = versioned.Digest
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(s.datasets) >= maxDefinitions {
@@ -256,6 +270,22 @@ func (s *Server) importDataset(w http.ResponseWriter, r *http.Request) {
 	}
 	s.datasets[id] = x
 	write(w, 201, x)
+}
+
+func redactDataset(dataset *Dataset) error {
+	raw, err := json.Marshal(dataset)
+	if err != nil {
+		return err
+	}
+	var object map[string]any
+	if err = json.Unmarshal(raw, &object); err != nil {
+		return err
+	}
+	clean, err := json.Marshal(core.Redact(object))
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(clean, dataset)
 }
 func (s *Server) createSuite(w http.ResponseWriter, r *http.Request) {
 	var x Suite
