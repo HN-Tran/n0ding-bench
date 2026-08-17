@@ -23,8 +23,9 @@ default database is `/data/bench.db`. The compose deployment mounts a named
 volume there while keeping the
 root filesystem read-only and enabling `no-new-privileges`.
 
-CI runs `scripts/container-layout-smoke.sh` twice: once against the raw image
-layer and once with the hardened named-volume layout. Both runs must remain
+CI runs `scripts/container-layout-smoke.sh` twice: first with no `/data` mount,
+which proves the raw container writable layer can create SQLite, and then with
+the hardened named-volume layout used by Compose. Both runs must remain
 healthy, create a non-empty SQLite database, execute the authenticated fixture,
 and expose its completed projection. This verifies writable packaging and
 startup; it is not a durability or backup/restore drill.

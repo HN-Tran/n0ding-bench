@@ -33,4 +33,4 @@ jobs:
           push: false
           load: true
           tags: n0ding-bench:ci
-      - run: sh scripts/container-layout-smoke.sh n0ding-bench:ci
+      - run: sh -n scripts/container-layout-smoke.sh && sh scripts/container-layout-smoke.sh n0ding-bench:ci
