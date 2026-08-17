@@ -12,4 +12,7 @@ The private v0.1 candidate is ready only when:
 8. CI thresholds demonstrate an intentional green and red run with stable exit codes and JUnit evidence.
 9. Tests, race check, vet, builds and package smoke tests pass on the exact candidate commit.
 
+The hermetic implementation evidence for items 3, 5 and 8 is documented in
+[the regression dogfood gate](dogfood-regression-gate.md).
+
 Passing this gate does not establish production readiness, universal model quality, statistical significance, tamper-proof storage or bit-identical remote reproducibility.

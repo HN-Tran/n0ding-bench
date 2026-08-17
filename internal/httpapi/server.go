@@ -396,6 +396,10 @@ func (s *Server) startBenchRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = s.Store.Append(x.ID, "benchmark.started", map[string]any{"suite": suite.ID, "suite_digest": versionedSuite.Digest, "dataset": dataset.ID, "dataset_digest": versionedDataset.Digest, "targets": x.TargetIDs, "cases": len(dataset.Cases), "concurrency": x.Concurrency, "max_attempts": x.MaxAttempts, "timeout_ms": x.TimeoutMS, "seed": x.Seed})
+	expectedByCase := make(map[string]string, len(versionedDataset.Cases))
+	for _, datasetCase := range versionedDataset.Cases {
+		expectedByCase[datasetCase.ID] = datasetCase.Expected
+	}
 	failed := 0
 	for _, target := range targets {
 		var adapter bench.Target
@@ -428,7 +432,7 @@ func (s *Server) startBenchRun(w http.ResponseWriter, r *http.Request) {
 				_, _ = s.Store.Append(x.ID, "case.attempt", payload)
 			}
 			for _, score := range caseResult.Scores {
-				_, _ = s.Store.Append(x.ID, "score.recorded", map[string]any{"case": caseResult.CaseID, "target": target.ID, "scorer": score.Kind, "scorer_version": score.Kind + "/v1", "score": score.Value, "passed": score.Passed, "evidence": score.Evidence})
+				_, _ = s.Store.Append(x.ID, "score.recorded", map[string]any{"case": caseResult.CaseID, "target": target.ID, "scorer": score.Kind, "scorer_version": score.Kind + "/v1", "score": score.Value, "passed": score.Passed, "evidence": score.Evidence, "expected": expectedByCase[caseResult.CaseID], "actual": caseResult.Output})
 			}
 			_, _ = s.Store.Append(x.ID, "case."+caseResult.Status, map[string]any{"case": caseResult.CaseID, "target": target.ID, "attempts": caseResult.Attempts, "duration_ns": caseResult.Duration.Nanoseconds(), "output": caseResult.Output, "error": caseResult.Error})
 			if caseResult.Status != "completed" {

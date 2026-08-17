@@ -109,7 +109,8 @@ func ciCommand(args []string, out, errout io.Writer) int {
 		return exitInternal
 	}
 	passed := comparison.Delta >= *minDelta
-	suite := junitSuite{Name: "n0ding-bench-regression", Tests: 1, Case: junitCase{Name: "candidate-vs-baseline"}}
+	caseName := fmt.Sprintf("candidate-vs-baseline[baseline=%s,candidate=%s]", *baseline, *candidate)
+	suite := junitSuite{Name: "n0ding-bench-regression", Tests: 1, Case: junitCase{Name: caseName}}
 	if !passed {
 		suite.Failures = 1
 		suite.Case.Failure = &junitFailure{Message: "regression threshold crossed", Text: fmt.Sprintf("delta=%g minimum=%g samples=%d", comparison.Delta, *minDelta, comparison.Samples)}
