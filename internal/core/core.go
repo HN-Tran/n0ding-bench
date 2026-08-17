@@ -175,6 +175,15 @@ func (s *Store) SaveDefinition(kind, id string, value any) error {
 		return err
 	}
 	clean := redactValue(generic)
+	// api_key_env is a credential lookup identifier, never the credential value.
+	// Preserve only a syntactically valid environment variable name.
+	if kind == "target" {
+		original, _ := generic.(map[string]any)
+		redacted, _ := clean.(map[string]any)
+		if name, ok := original["api_key_env"].(string); ok && regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(name) {
+			redacted["api_key_env"] = name
+		}
+	}
 	b, err := json.Marshal(clean)
 	if err != nil {
 		return err

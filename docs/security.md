@@ -10,6 +10,9 @@ Datasets, prompts, provider responses, event payloads, replay bundles and browse
 - Ordinary dataset and prompt content is evidence, not confidential storage;
   arbitrary sensitive prose that does not match those patterns is not magically
   recognized as a secret and must not be submitted.
+- `api_key_env` stores only a validated environment-variable name used to look
+  up a credential server-side. That identifier is intentionally preserved;
+  the environment variable's value is never stored in a target definition.
 - Replay imports are size-limited, checksum-verified and read-only.
 - Provider URLs and redirects must pass the target policy before any request.
 - Browser output is rendered as text under a restrictive CSP.

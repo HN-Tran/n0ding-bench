@@ -228,6 +228,67 @@ func TestScoreExpectedActualSentinelsRedactedFromStorageAPIAndExport(t *testing.
 	}
 }
 
+func TestSuiteAndTargetDefinitionRedactionPreservesTypedIdentifiers(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "definitions.db")
+	s, err := core.OpenStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := New("bench", s)
+	post := func(path, body string) []byte {
+		t.Helper()
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("POST", path, strings.NewReader(body)))
+		if w.Code != 201 {
+			t.Fatalf("%s: %d %s", path, w.Code, w.Body.String())
+		}
+		return w.Body.Bytes()
+	}
+	post("/api/v1/datasets", `{"id":"d","name":"Ordinary dataset","version":"1","cases":[{"id":"c","input":"q","expected":"ordinary"}]}`)
+	suiteRaw := post("/api/v1/suites", `{"id":"s","name":"Suite sentinel-suite-secret","version":"1","dataset_id":"d","scorers":[{"kind":"regex","pattern":"sentinel-pattern-secret"}]}`)
+	var suite Suite
+	if err := json.Unmarshal(suiteRaw, &suite); err != nil || suite.ID != "s" || suite.DatasetID != "d" || suite.Name != "Suite [REDACTED]" || suite.Scorers[0].Pattern != "[REDACTED]" {
+		t.Fatalf("suite POST: %+v err=%v", suite, err)
+	}
+	targetRaw := post("/api/v1/targets", `{"id":"t","name":"Target sentinel-target-secret","adapter":"openai-compatible","model":"sentinel-model-secret","endpoint":"https://example.invalid/v1","api_key_env":"SENTINEL_API_KEY"}`)
+	var target Target
+	if err := json.Unmarshal(targetRaw, &target); err != nil || target.ID != "t" || target.Name != "Target [REDACTED]" || target.Model != "[REDACTED]" || target.Endpoint != "https://example.invalid/v1" || target.APIKeyEnv != "SENTINEL_API_KEY" {
+		t.Fatalf("target POST: %+v err=%v", target, err)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/suites", nil))
+	var suites struct {
+		Suites []Suite `json:"suites"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &suites); err != nil || len(suites.Suites) != 1 || suites.Suites[0].Name != "Suite [REDACTED]" || suites.Suites[0].Scorers[0].Pattern != "[REDACTED]" {
+		t.Fatalf("suite GET: %+v err=%v", suites, err)
+	}
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/targets", nil))
+	var targets struct {
+		Targets []Target `json:"targets"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &targets); err != nil || len(targets.Targets) != 1 || targets.Targets[0].Name != "Target [REDACTED]" || targets.Targets[0].Model != "[REDACTED]" || targets.Targets[0].Endpoint != "https://example.invalid/v1" || targets.Targets[0].APIKeyEnv != "SENTINEL_API_KEY" || targets.Targets[0].Outputs != nil {
+		t.Fatalf("target GET: %+v err=%v", targets, err)
+	}
+	for _, kind := range []string{"suite", "target"} {
+		rows, err := s.Definitions(kind)
+		if err != nil || len(rows) != 1 {
+			t.Fatalf("%s definitions: %v", kind, err)
+		}
+		raw := string(rows[0])
+		if strings.Contains(raw, "sentinel-") {
+			t.Fatalf("persisted %s leak: %s", kind, raw)
+		}
+		if kind == "target" && !strings.Contains(raw, `"api_key_env":"SENTINEL_API_KEY"`) {
+			t.Fatalf("environment identifier lost: %s", raw)
+		}
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestEventBacklogIsBounded(t *testing.T) {
 	s := core.NewStore()
 	_ = s.CreateRun(core.Run{ID: "r", Mode: "bench"})

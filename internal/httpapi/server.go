@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -73,6 +74,8 @@ const maxSSEBacklog = 1000
 const maxDefinitions = 1000
 const maxCases = 10000
 const maxTargetsPerRun = 64
+
+var environmentNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func New(mode string, store *core.Store) http.Handler {
 	return NewAuthenticated(mode, store, "")
@@ -287,6 +290,43 @@ func redactDataset(dataset *Dataset) error {
 	}
 	return json.Unmarshal(clean, dataset)
 }
+
+func redactSuite(suite *Suite) error {
+	id, version, datasetID := suite.ID, suite.Version, suite.DatasetID
+	if err := redactDefinition(suite); err != nil {
+		return err
+	}
+	suite.ID, suite.Version, suite.DatasetID = id, version, datasetID
+	return nil
+}
+
+func redactTarget(target *Target) error {
+	id, adapter, apiKeyEnv := target.ID, target.Adapter, target.APIKeyEnv
+	if apiKeyEnv != "" && !environmentNamePattern.MatchString(apiKeyEnv) {
+		return errors.New("api_key_env must be an environment variable name")
+	}
+	if err := redactDefinition(target); err != nil {
+		return err
+	}
+	target.ID, target.Adapter, target.APIKeyEnv = id, adapter, apiKeyEnv
+	return nil
+}
+
+func redactDefinition(value any) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	var object map[string]any
+	if err = json.Unmarshal(raw, &object); err != nil {
+		return err
+	}
+	clean, err := json.Marshal(core.Redact(object))
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(clean, value)
+}
 func (s *Server) createSuite(w http.ResponseWriter, r *http.Request) {
 	var x Suite
 	if decodeLimited(w, r, &x) != nil || !validDefinition(x.ID, x.Name) || x.Version == "" || x.DatasetID == "" || len(x.Scorers) == 0 {
@@ -297,6 +337,10 @@ func (s *Server) createSuite(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 	if _, ok := s.datasets[x.DatasetID]; !ok {
 		write(w, 400, map[string]string{"error": "dataset not found"})
+		return
+	}
+	if err := redactSuite(&x); err != nil {
+		write(w, 500, map[string]string{"error": "redact suite"})
 		return
 	}
 	versioned, err := bench.NewSuite(x.Name, x.Version, s.datasets[x.DatasetID].Digest, x.Scorers)
@@ -335,6 +379,10 @@ func (s *Server) createTarget(w http.ResponseWriter, r *http.Request) {
 			write(w, 400, map[string]string{"error": "target output exceeds limit"})
 			return
 		}
+	}
+	if err := redactTarget(&x); err != nil {
+		write(w, 400, map[string]string{"error": err.Error()})
+		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
