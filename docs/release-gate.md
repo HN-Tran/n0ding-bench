@@ -1,6 +1,6 @@
-# Private v0.1 release gate
+# Public-preview v0.1 release gate
 
-The private v0.1 candidate is ready only when:
+The public-preview v0.1 candidate is ready only when:
 
 1. A clean machine reaches its first deterministic run in under ten minutes.
 2. Fake and local OpenAI-compatible targets exercise pass, fail, malformed, timeout, retry and cancellation paths.
