@@ -1,6 +1,6 @@
 # Hermetic regression dogfood gate
 
-`TestDogfoodRegressionGate` is the private v0.1 end-to-end evidence scenario.
+`TestDogfoodRegressionGate` is the v0.1 public-preview end-to-end evidence scenario.
 It creates a content-addressed two-case dataset and exact-match suite, then runs
 the supported deterministic fake adapter once with correct answers and once
 with deliberately wrong answers. The declared minimum delta is `-0.25`; the

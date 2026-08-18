@@ -1,8 +1,13 @@
 # n0ding Bench
 
+[![CI](https://github.com/HN-Tran/n0ding-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/HN-Tran/n0ding-bench/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+![Status](https://img.shields.io/badge/status-public%20preview-orange)
+
 Local-first benchmark and evaluation harness for running, comparing, inspecting and replaying AI evaluations without hiding how scores were produced.
 
-> Private v0.1 development branch. Not published, stable or production-ready.
+> **Public v0.1 preview.** The interfaces may change and the project is not
+> production-ready. Use it for local evaluation and reproducible experiments.
 
 ## Quick start
 
@@ -54,3 +59,9 @@ Bench records reproducible configuration and evidence, not guaranteed bit-identi
 - [Event schema](schemas/event-envelope.schema.json)
 
 Bench is independent. It does not require n0ding Cache or any agent-orchestration product.
+
+## Contributing, security, and license
+
+Focused contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+n0ding Bench is licensed under [Apache-2.0](LICENSE).
